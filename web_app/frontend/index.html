@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+   <html lang="en">
+   <head>
+       <meta charset="UTF-8">
+       <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       <title>Brent Oil Price Dashboard</title>
+       <script src="https://cdn.tailwindcss.com"></script>
+       <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+       <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+       <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.5/Babel.min.js"></script>
+       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+       <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+   </head>
+   <body class="bg-gray-100">
+       <div id="root" class="container mx-auto p-4"></div>
+       <script type="text/babel">
+           const { useState, useEffect } = React;
+
+           const App = () => {
+               const [prices, setPrices] = useState([]);
+               const [dates, setDates] = useState([]);
+               const [events, setEvents] = useState([]);
+               const [changePoints, setChangePoints] = useState([]);
+
+               useEffect(() => {
+                   // Fetch price data
+                   fetch('/api/prices')
+                       .then(res => res.json())
+                       .then(data => {
+                           setDates(data.dates);
+                           setPrices(data.prices);
+                       });
+
+                   // Fetch events data
+                   fetch('/api/events')
+                       .then(res => res.json())
+                       .then(data => setEvents(data));
+
+                   // Fetch change points
+                   fetch('/api/change-points')
+                       .then(res => res.json())
+                       .then(data => setChangePoints(data));
+               }, []);
+
+               useEffect(() => {
+                   if (dates.length && prices.length) {
+                       const ctx = document.getElementById('priceChart').getContext('2d');
+                       new Chart(ctx, {
+                           type: 'line',
+                           data: {
+                               labels: dates,
+                               datasets: [{
+                                   label: 'Brent Oil Price (USD)',
+                                   data: prices,
+                                   borderColor: 'blue',
+                                   fill: false
+                               }]
+                           },
+                           options: {
+                               scales: {
+                                   x: { title: { display: true, text: 'Date' } },
+                                   y: { title: { display: true, text: 'Price (USD)' } }
+                               },
+                               plugins: {
+                                   annotation: {
+                                       annotations: [
+                                           ...changePoints.map(cp => ({
+                                               type: 'line',
+                                               xMin: cp.date,
+                                               xMax: cp.date,
+                                               borderColor: 'red',
+                                               borderWidth: 2,
+                                               label: {
+                                                   content: `Change Point: ${cp.date} (Shift: $${cp.mean_shift.toFixed(2)})`,
+                                                   display: true,
+                                                   position: 'top'
+                                               }
+                                           })),
+                                           ...events.dates.map((date, i) => ({
+                                               type: 'point',
+                                               xValue: date,
+                                               yValue: prices[dates.indexOf(date)],
+                                               backgroundColor: 'green',
+                                               radius: 5,
+                                               label: {
+                                                   content: events.descriptions[i],
+                                                   display: true,
+                                                   position: 'center'
+                                               }
+                                           }))
+                                       ]
+                                   }
+                               }
+                           }
+                       });
+                   }
+               }, [dates, prices, events, changePoints]);
+
+               return (
+                   <div class="p-6">
+                       <h1 class="text-3xl font-bold mb-4">Brent Oil Price Dashboard</h1>
+                       <canvas id="priceChart" class="mb-6"></canvas>
+                       <h2 class="text-2xl font-semibold mb-2">Change Points</h2>
+                       <table class="w-full border-collapse border border-gray-300">
+                           <thead>
+                               <tr class="bg-gray-200">
+                                   <th class="border border-gray-300 p-2">Date</th>
+                                   <th class="border border-gray-300 p-2">Mean Before (USD)</th>
+                                   <th class="border border-gray-300 p-2">Mean After (USD)</th>
+                                   <th class="border border-gray-300 p-2">Mean Shift (USD)</th>
+                               </tr>
+                           </thead>
+                           <tbody>
+                               {changePoints.map(cp => (
+                                   <tr key={cp.date}>
+                                       <td class="border border-gray-300 p-2">{cp.date}</td>
+                                       <td class="border border-gray-300 p-2">{cp.mean_before.toFixed(2)}</td>
+                                       <td class="border border-gray-300 p-2">{cp.mean_after.toFixed(2)}</td>
+                                       <td class="border border-gray-300 p-2">{cp.mean_shift.toFixed(2)}</td>
+                                   </tr>
+                               ))}
+                           </tbody>
+                       </table>
+                       <h2 class="text-2xl font-semibold mt-6 mb-2">Events</h2>
+                       <table class="w-full border-collapse border border-gray-300">
+                           <thead>
+                               <tr class="bg-gray-200">
+                                   <th class="border border-gray-300 p-2">Date</th>
+                                   <th class="border border-gray-300 p-2">Description</th>
+                                   <th class="border border-gray-300 p-2">Type</th>
+                               </tr>
+                           </thead>
+                           <tbody>
+                               {events.dates && events.dates.map((date, i) => (
+                                   <tr key={date}>
+                                       <td class="border border-gray-300 p-2">{date}</td>
+                                       <td class="border border-gray-300 p-2">{events.descriptions[i]}</td>
+                                       <td class="border border-gray-300 p-2">{events.types[i]}</td>
+                                   </tr>
+                               ))}
+                           </tbody>
+                       </table>
+                   </div>
+               );
+           };
+
+           ReactDOM.render(<App />, document.getElementById('root'));
+       </script>
+   </body>
+   </html>
